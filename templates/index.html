@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Генератор постов для товаров: вставьте ссылку, а нейросеть BeatAPI придумает живой пост с заголовком, пользой, CTA и хэштегами.">
+  <title>Постмастер — AI-генератор постов по ссылке</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%8D%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="page">
+    <header class="site-header">
+      <a class="brand" href="{{ url_for('index') }}" aria-label="Постмастер — на главную">
+        <span class="brand-mark">п</span>
+        <span class="brand-name">Постмастер</span>
+      </a>
+      <span class="local-badge"><span class="local-dot"></span> AI-генератор</span>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow">Посты для товаров по ссылке</p>
+      <h1>Одна ссылка.<br><em>Живой пост.</em></h1>
+      <p class="hero-sub">Вставьте ссылку на карточку товара — нейросеть изучит страницу, найдёт главное и придумает оригинальный текст с заголовком, пользой, CTA и хэштегами.</p>
+    </section>
+
+    <main class="workspace">
+      <section class="card form-card" aria-labelledby="form-title">
+        <div class="card-heading">
+          <span class="step">01</span>
+          <div>
+            <h2 id="form-title">Товар</h2>
+            <p>Одна ссылка — и достаточно.</p>
+          </div>
+        </div>
+
+        {% if error %}
+        <div class="alert" id="form-error" role="alert">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M12 8v5"></path>
+            <path d="M12 16.5h.01"></path>
+          </svg>
+          <span>{{ error }}</span>
+        </div>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('index') }}" id="generate-form">
+          <div class="field{% if error %} field--invalid{% endif %}">
+            <label for="url">Ссылка на товар</label>
+            <div class="url-field">
+              <svg class="url-icon" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1L11 5"></path>
+                <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1-1"></path>
+              </svg>
+              <input
+                type="url"
+                id="url"
+                name="url"
+                value="{{ form.url }}"
+                maxlength="2048"
+                placeholder="https://shop.ru/product/..."
+                autocomplete="url"
+                inputmode="url"
+                required
+                {% if error %}aria-invalid="true" aria-describedby="form-error"{% endif %}
+              >
+            </div>
+            <p class="hint">Страница должна открываться без входа в аккаунт. Магазин может ограничивать автоматический доступ.</p>
+          </div>
+
+          <fieldset class="field mood-field">
+            <legend>Настроение поста</legend>
+            <div class="mood-grid">
+              {% for key, mood in moods.items() %}
+              <label class="mood-option">
+                <input type="radio" name="mood" value="{{ key }}" {% if form.mood == key %}checked{% endif %}>
+                <span class="mood-card{% if key == 'auto' %} mood-card--auto{% endif %}">
+                  <span class="mood-emoji" aria-hidden="true">{{ mood.emoji }}</span>
+                  <span>{{ mood.label }}</span>
+                </span>
+              </label>
+              {% endfor %}
+            </div>
+            <p class="hint">«Разные эмоции» выбирает новый характер для каждого поста.</p>
+          </fieldset>
+
+          <button class="primary-button" type="submit" id="generate-button">
+            <svg class="button-spark" aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"></path>
+              <path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16z"></path>
+            </svg>
+            <span id="generate-label">Сгенерировать пост</span>
+            <span class="button-arrow" aria-hidden="true">→</span>
+            <span class="button-spinner" aria-hidden="true"></span>
+          </button>
+        </form>
+
+        <p class="tiny-note">Ссылка и текст страницы отправляются в BeatAPI только для генерации поста. Ключ хранится в переменной окружения и не попадает в браузер.</p>
+      </section>
+
+      <section class="card result-card{% if post %} has-post{% endif %}" aria-labelledby="result-title" aria-label="Готовый пост">
+        <div class="card-heading">
+          <span class="step step--accent">02</span>
+          <div>
+            <h2 id="result-title">Готовый пост</h2>
+            <p>{% if post %}Проверьте текст и скопируйте одним кликом.{% else %}Здесь появится пост, который придумает нейросеть.{% endif %}</p>
+          </div>
+        </div>
+
+        <div class="generating-state" id="generating-state" aria-hidden="true">
+          <div class="generating-orbit" aria-hidden="true"><span></span></div>
+          <p class="generating-title">Изучаю страницу товара</p>
+          <p class="generating-sub">Нейросеть ищет главное и придумывает текст. Это может занять несколько секунд.</p>
+        </div>
+
+        <textarea id="post-text" class="post-source" readonly aria-hidden="true" tabindex="-1">{{ post_text }}</textarea>
+
+        {% if post %}
+        <article class="post-preview">
+          <div class="post-meta">
+            <span class="mood-badge">{{ post.mood_emoji }} {{ post.mood_label }}</span>
+            <span class="char-count">{{ post.char_count }} символов</span>
+          </div>
+
+          <h3 class="post-title">{{ post.title }}</h3>
+          {% if post.lead %}<p class="post-intro">{{ post.lead }}</p>{% endif %}
+          {% if post.body %}<p class="post-body">{{ post.body }}</p>{% endif %}
+
+          {% if post.benefits %}
+          <h4 class="post-section">{{ post.section_title }}</h4>
+          <ul class="post-benefits">
+            {% for benefit in post.benefits %}
+            <li>{{ benefit }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+
+          {% if post.cta %}<p class="post-cta">{{ post.cta }}</p>{% endif %}
+
+          <a class="post-link" href="{{ post.product_url }}" target="_blank" rel="noopener noreferrer">
+            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 4h6v6"></path>
+              <path d="M20 4l-9 9"></path>
+              <path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"></path>
+            </svg>
+            <span>{{ post.site }}</span>
+            <span class="post-link-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          {% if post.hashtags %}
+          <p class="post-tags">
+            {% for tag in post.hashtags %}<span>{{ tag }}</span>{% endfor %}
+          </p>
+          {% endif %}
+        </article>
+
+        <div class="result-actions">
+          <button class="primary-button copy-button" id="copy-button" type="button">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="11" height="11" rx="2.5"></rect>
+              <path d="M15 6.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h.5"></path>
+            </svg>
+            <span class="copy-label">Скопировать пост</span>
+          </button>
+          <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <div class="empty-icon" aria-hidden="true">✍️</div>
+          <h3>Здесь появится ваш пост</h3>
+          <p>Вставьте ссылку на товар и выберите настроение. Нейросеть прочитает страницу и соберёт готовый текст.</p>
+          <ul class="empty-list">
+            <li>✨ Оригинальный заголовок</li>
+            <li>🛍 Конкретная польза</li>
+            <li>#️⃣ Хэштеги и CTA</li>
+          </ul>
+        </div>
+        {% endif %}
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>Стиль по умолчанию: {{ voice.tone }} · {{ voice.length }} длина · {{ voice.emoji }} эмодзи · заголовок «{{ voice.heading }}»</span>
+      <span>Flask · BeatAPI · без базы данных</span>
+    </footer>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
